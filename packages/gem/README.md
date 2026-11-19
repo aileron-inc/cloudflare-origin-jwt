@@ -18,13 +18,36 @@ gem "cloudflare-origin-jwt"
 
 Rails なら initializer を1つ置くだけで、middleware が先頭に入る（Railtie）。
 
+**公開鍵はリポジトリに置く**。秘密ではないし、ENV にすると環境ごとに同じ値を揃える運用が増えるだけになる。秘密鍵だけが Worker の secret。
+
 ```ruby
 # config/initializers/cloudflare_origin_jwt.rb
+module OriginKeys
+  CURRENT  = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+
+  # ローテーション中だけ残す。古いトークンの寿命が切れたら消す。
+  PREVIOUS = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+end
+
 CloudflareOriginJwt.configure do |config|
-  config.public_key = ENV["CF_ORIGIN_JWT_PUBLIC_KEY"] # PEM
+  config.public_keys = [OriginKeys::CURRENT, OriginKeys::PREVIOUS]
   config.issuer     = "hairbook-gateway"
   config.audience   = "salonpage"
 end
+```
+
+ENV で上書きしたい場合だけ、初期化の前に差し込む。
+
+```ruby
+config.public_keys = ENV["CF_ORIGIN_JWT_PUBLIC_KEYS"]&.split(",") || [OriginKeys::CURRENT]
 ```
 
 `public_key` が空なら**何もしない**（ローカル開発・テストは gateway 無しで動く）。
@@ -82,6 +105,19 @@ CloudflareOriginJwt.flags(env)  # => { "page_published" => 1, ... }（無けれ�
 - **短命にする**。60 秒程度。長くするとリプレイの窓が広がる
 - **鍵は分ける**。gateway ごと・用途ごとに鍵ペアを分けると、片方の漏洩が他へ広がらない
 - **Cloudflare Access の代わりではない**。ログインして使う社内画面を Access で守るなら [`cloudflare_access_gate`](https://rubygems.org/gems/cloudflare_access_gate) など別の仕組みを使う。この gem は「gateway を通ったか」だけを見る
+
+## デプロイの順序
+
+**gateway を先、origin（Rails）を後**。逆にすると、トークンを付けない古い gateway のリクエストが origin で 404 になる。
+
+```
+1. gateway をデプロイ（トークンを付け始める。古い origin は無視するので無害）
+2. origin をデプロイ（この時点で全リクエストに有効なトークンが付いている）
+```
+
+Workers のデプロイは一括で切り替わるので、「トークン無しの gateway」と「検証する origin」が同時に生きる窓は作らない。Fly 側のロールアウト中も、旧マシンは無視・新マシンは検証で、どちらにもトークンは付いている。
+
+鍵を変えるときは「鍵のローテーション」の順で、origin に新鍵を先に足す。
 
 ## 鍵のローテーション
 

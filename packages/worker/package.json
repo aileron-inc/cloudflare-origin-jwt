@@ -1,9 +1,30 @@
 {
-  "name": "@aileron-inc/cloudflare-origin-jwt",
+  "name": "cloudflare-origin-jwt",
   "version": "0.1.0",
-  "private": true,
+  "description": "Sign the origin token a Cloudflare gateway puts on requests, verified by cloudflare-origin-jwt on the origin",
+  "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aileron-inc/cloudflare-origin-jwt.git",
+    "directory": "packages/worker"
+  },
+  "homepage": "https://github.com/aileron-inc/cloudflare-origin-jwt",
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "jwt",
+    "ed25519",
+    "origin"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
