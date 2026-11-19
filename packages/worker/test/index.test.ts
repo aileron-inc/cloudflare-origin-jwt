@@ -50,6 +50,12 @@ describe("signOriginToken", () => {
     expect(header).toEqual({ alg: "EdDSA", typ: "JWT" });
   });
 
+  test("names the key when a kid is given", async () => {
+    const token = await signOriginToken(key, { ...claims, kid: "2026-11" });
+    const header = JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/")));
+    expect(header).toEqual({ alg: "EdDSA", typ: "JWT", kid: "2026-11" });
+  });
+
   test("omits sub and flags when they are not given", async () => {
     const token = await signOriginToken(key, claims);
     const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));

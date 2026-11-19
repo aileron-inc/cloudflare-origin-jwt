@@ -16,6 +16,8 @@ export type OriginTokenInput = {
   aud: string;
   /** Optional subject, for example the salon id. */
   sub?: string;
+  /** Optional key id, so the origin can pick the matching public key. */
+  kid?: string;
   /** Data the origin reads from the claims, such as salon flags. */
   flags?: Flags;
   /** Lifetime in seconds. Keep it short: 60 is a good default. */
@@ -64,7 +66,10 @@ export async function signOriginToken(
   payload.exp = now + ttl;
   if (input.flags !== undefined) payload.flags = input.flags;
 
-  const signingInput = `${segment({ alg: "EdDSA", typ: "JWT" })}.${segment(payload)}`;
+  const header: Record<string, unknown> = { alg: "EdDSA", typ: "JWT" };
+  if (input.kid !== undefined) header.kid = input.kid;
+
+  const signingInput = `${segment(header)}.${segment(payload)}`;
   const signature = new Uint8Array(
     await crypto.subtle.sign({ name: "Ed25519" }, privateKey, encoder.encode(signingInput)),
   );

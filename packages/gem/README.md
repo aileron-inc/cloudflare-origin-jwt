@@ -68,7 +68,7 @@ CloudflareOriginJwt.flags(env)  # => { "page_published" => 1, ... }（無けれ�
 
 | 設定 | 既定 | 説明 |
 |---|---|---|
-| `public_key` | `nil` | Ed25519 の公開鍵（PEM か `Ed25519::VerifyKey`）。空なら middleware は素通し |
+| `public_keys` | `[]` | Ed25519 公開鍵の配列。Hash にすると `kid` で選ぶ。空なら middleware は素通し |
 | `issuer` | `nil` | 検証する `iss`。空なら検証しない |
 | `audience` | `nil` | 検証する `aud`。空なら検証しない |
 | `header` | `HTTP_X_CF_ORIGIN_JWT` | Rack の env キー |
@@ -82,6 +82,36 @@ CloudflareOriginJwt.flags(env)  # => { "page_published" => 1, ... }（無けれ�
 - **短命にする**。60 秒程度。長くするとリプレイの窓が広がる
 - **鍵は分ける**。gateway ごと・用途ごとに鍵ペアを分けると、片方の漏洩が他へ広がらない
 - **Cloudflare Access の代わりではない**。ログインして使う社内画面を Access で守るなら [`cloudflare_access_gate`](https://rubygems.org/gems/cloudflare_access_gate) など別の仕組みを使う。この gem は「gateway を通ったか」だけを見る
+
+## 鍵のローテーション
+
+公開鍵は**複数**持てる。切り替えで止まらないように、次の順で回す。
+
+```ruby
+# 1. 新しい鍵を「追加」してデプロイ（古い鍵も残す）
+config.public_keys = [
+  ENV["CF_ORIGIN_JWT_PUBLIC_KEY_2026_11"],
+  ENV["CF_ORIGIN_JWT_PUBLIC_KEY_2025_05"],
+]
+
+# 2. gateway の署名鍵を新しいものに切り替える（両方の鍵が有効なので即時で安全）
+
+# 3. 古いトークンが寿命で消えたら、古い鍵を外す
+config.public_keys = [ENV["CF_ORIGIN_JWT_PUBLIC_KEY_2026_11"]]
+```
+
+`kid` をトークンのヘッダに入れると、照合する鍵を1つに絞れる。Hash で登録する。
+
+```ruby
+config.public_keys = {
+  "2026-11" => ENV["CF_ORIGIN_JWT_PUBLIC_KEY_2026_11"],
+  "2025-05" => ENV["CF_ORIGIN_JWT_PUBLIC_KEY_2025_05"],
+}
+```
+
+`kid` が一致しなければ、登録した全部の鍵を順に試す（鍵が数個なら誤差）。
+
+**署名の寿命（既定 60 秒）より長く古い鍵を残さない**こと。寿命を過ぎたトークンは `exp` で落ちるので、古い鍵を外しても安全。
 
 ## 開発
 
