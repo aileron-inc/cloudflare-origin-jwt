@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gem:
+    runs-on: ubuntu-latest
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/packages/gem/Gemfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - run: bundle install
+        working-directory: packages/gem
+      - run: bundle exec rake test
+        working-directory: packages/gem
+
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+        working-directory: packages/worker
+      - run: bun run typecheck
+        working-directory: packages/worker
+      - run: bun test
+        working-directory: packages/worker
+
+  contract:
+    runs-on: ubuntu-latest
+    needs: [gem, worker]
+    env:
+      BUNDLE_GEMFILE: ${{ github.workspace }}/packages/gem/Gemfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+      - run: bun install
+        working-directory: packages/worker
+      - name: The committed token must match what the worker signs today
+        run: |
+          bun run script/emit-fixture.ts > /dev/null
+          git diff --exit-code ../../contract/token.jwt
+        working-directory: packages/worker
+      - run: bundle install
+        working-directory: packages/gem
+      - name: Ruby must verify the worker's token
+        run: bundle exec rake test
+        working-directory: packages/gem

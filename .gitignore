@@ -1,0 +1,8 @@
+node_modules/
+.bundle/
+vendor/
+pkg/
+tmp/
+*.gem
+Gemfile.lock
+packages/gem/Gemfile.lock

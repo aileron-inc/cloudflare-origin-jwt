@@ -1,0 +1,12 @@
+{
+  "iss": "hairbook-gateway",
+  "aud": "salonpage",
+  "sub": "H000749472",
+  "flags": {
+    "page_published": 1,
+    "noroshi_reserve": 0,
+    "noroshi_production_released": 1
+  },
+  "iat": 4102444800,
+  "ttlSeconds": 60
+}
