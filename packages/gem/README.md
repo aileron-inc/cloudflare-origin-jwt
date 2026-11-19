@@ -18,13 +18,36 @@ gem "cloudflare-origin-jwt"
 
 Rails なら initializer を1つ置くだけで、middleware が先頭に入る（Railtie）。
 
+**公開鍵はリポジトリに置く**。秘密ではないし、ENV にすると環境ごとに同じ値を揃える運用が増えるだけになる。秘密鍵だけが Worker の secret。
+
 ```ruby
 # config/initializers/cloudflare_origin_jwt.rb
+module OriginKeys
+  CURRENT  = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+
+  # ローテーション中だけ残す。古いトークンの寿命が切れたら消す。
+  PREVIOUS = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+end
+
 CloudflareOriginJwt.configure do |config|
-  config.public_key = ENV["CF_ORIGIN_JWT_PUBLIC_KEY"] # PEM
+  config.public_keys = [OriginKeys::CURRENT, OriginKeys::PREVIOUS]
   config.issuer     = "hairbook-gateway"
   config.audience   = "salonpage"
 end
+```
+
+ENV で上書きしたい場合だけ、初期化の前に差し込む。
+
+```ruby
+config.public_keys = ENV["CF_ORIGIN_JWT_PUBLIC_KEYS"]&.split(",") || [OriginKeys::CURRENT]
 ```
 
 `public_key` が空なら**何もしない**（ローカル開発・テストは gateway 無しで動く）。

@@ -42,19 +42,39 @@ Cloudflare Access は「誰が入れるか」を決める仕組みで、利用�
 gem "cloudflare-origin-jwt"
 ```
 
+公開鍵は**リポジトリに置く**。秘密ではないし、ENV にすると 3アプリ×2環境で同じ値を揃える運用が増えるだけになる。秘密鍵だけが Worker の secret。
+
 ```ruby
 # config/initializers/cloudflare_origin_jwt.rb
+module OriginKeys
+  # いま使っている鍵。
+  CURRENT = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+
+  # ローテーション中だけ残す鍵。古いトークンの寿命が切れたら消す。
+  PREVIOUS = <<~PEM
+    -----BEGIN PUBLIC KEY-----
+    ...
+    -----END PUBLIC KEY-----
+  PEM
+end
+
 CloudflareOriginJwt.configure do |config|
-  config.public_key = ENV["CF_ORIGIN_JWT_PUBLIC_KEY"] # PEM
+  config.public_keys = [OriginKeys::CURRENT, OriginKeys::PREVIOUS]
   config.issuer     = "hairbook-gateway"
   config.audience   = "salonpage"
 end
 ```
 
-`public_key` が空なら何もしない（ローカル開発は gateway 無しで動く）。
+`public_key`（単数）でもよい。`public_keys` が空なら middleware は何もしない（ローカル開発は gateway 無しで動く）。
+
+ENV で上書きしたい場合だけ、初期化の前に差し込む。
 
 ```ruby
-CloudflareOriginJwt.flags(request.env) # => { "page_published" => 1, ... }
+config.public_keys = ENV["CF_ORIGIN_JWT_PUBLIC_KEYS"]&.split(",") || [OriginKeys::CURRENT]
 ```
 
 ## 使い方（Worker）
