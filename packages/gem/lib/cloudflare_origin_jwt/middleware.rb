@@ -7,7 +7,7 @@ module CloudflareOriginJwt
   # Rejects any request that does not carry a JWT signed by the gateway.
   #
   # The gateway runs at the Cloudflare edge and signs a short-lived token per
-  # request. The origin only ever holds the public key, so a compromised origin
+  # request. The origin only ever holds public keys, so a compromised origin
   # cannot mint tokens. Anything without a valid token never reaches the app.
   class Middleware
     ENV_KEY = "cloudflare_origin_jwt.claims"
@@ -31,24 +31,47 @@ module CloudflareOriginJwt
 
     private
 
+    # More than one key is allowed so keys can be rotated. The token's "kid"
+    # narrows the search when the host registered keys by kid; otherwise every
+    # key is tried, which is cheap with a handful of keys.
     def verify(token, config)
       return nil if token.empty?
 
-      payload, = JWT.decode(
-        token,
-        config.verify_key,
-        true,
+      error = nil
+      candidates(token, config).each do |key|
+        begin
+          payload, = JWT.decode(token, key, true, decode_options(config))
+          return payload
+        rescue JWT::DecodeError => cause
+          error = cause
+        end
+      end
+      config.logger&.warn("cloudflare_origin_jwt: #{error&.class}: #{error&.message}")
+      nil
+    end
+
+    def candidates(token, config)
+      keys = config.verify_keys
+      named = config.key_for_kid(kid_of(token))
+      named ? [named] + (keys - [named]) : keys
+    end
+
+    def kid_of(token)
+      header, = JWT.decode(token, nil, false)
+      header["kid"]
+    rescue JWT::DecodeError
+      nil
+    end
+
+    def decode_options(config)
+      {
         algorithm: "EdDSA",
         iss: config.issuer,
         verify_iss: !config.issuer.to_s.empty?,
         aud: config.audience,
         verify_aud: !config.audience.to_s.empty?,
         leeway: config.leeway
-      )
-      payload
-    rescue JWT::DecodeError => error
-      config.logger&.warn("cloudflare_origin_jwt: #{error.class}: #{error.message}")
-      nil
+      }
     end
 
     # The body stays empty on purpose: an unauthenticated caller learns only
