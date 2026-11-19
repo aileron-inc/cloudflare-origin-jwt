@@ -72,6 +72,19 @@ const token = await signOriginToken(key, {
 const headers = originTokenHeaders(token);
 ```
 
+## デプロイの順序
+
+**gateway を先、origin（Rails）を後**。逆にすると、トークンを付けない古い gateway のリクエストが origin で 404 になる。
+
+```
+1. gateway をデプロイ（トークンを付け始める。古い origin は無視するので無害）
+2. origin をデプロイ（この時点で全リクエストに有効なトークンが付いている）
+```
+
+Workers のデプロイは一括で切り替わるので、「トークン無しの gateway」と「検証する origin」が同時に生きる窓は作らない。Fly 側のロールアウト中も、旧マシンは無視・新マシンは検証で、どちらにもトークンは付いている。
+
+鍵を変えるときは「鍵のローテーション」の順で、origin に新鍵を先に足す。
+
 ## 鍵のローテーション
 
 公開鍵は**複数**持てる。切り替えで止まらないように、次の順で回す。

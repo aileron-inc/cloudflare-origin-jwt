@@ -83,6 +83,19 @@ CloudflareOriginJwt.flags(env)  # => { "page_published" => 1, ... }（無けれ�
 - **鍵は分ける**。gateway ごと・用途ごとに鍵ペアを分けると、片方の漏洩が他へ広がらない
 - **Cloudflare Access の代わりではない**。ログインして使う社内画面を Access で守るなら [`cloudflare_access_gate`](https://rubygems.org/gems/cloudflare_access_gate) など別の仕組みを使う。この gem は「gateway を通ったか」だけを見る
 
+## デプロイの順序
+
+**gateway を先、origin（Rails）を後**。逆にすると、トークンを付けない古い gateway のリクエストが origin で 404 になる。
+
+```
+1. gateway をデプロイ（トークンを付け始める。古い origin は無視するので無害）
+2. origin をデプロイ（この時点で全リクエストに有効なトークンが付いている）
+```
+
+Workers のデプロイは一括で切り替わるので、「トークン無しの gateway」と「検証する origin」が同時に生きる窓は作らない。Fly 側のロールアウト中も、旧マシンは無視・新マシンは検証で、どちらにもトークンは付いている。
+
+鍵を変えるときは「鍵のローテーション」の順で、origin に新鍵を先に足す。
+
 ## 鍵のローテーション
 
 公開鍵は**複数**持てる。切り替えで止まらないように、次の順で回す。
